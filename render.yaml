@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: croncloud-backend
+    env: node
+    plan: free
+    repo: https://github.com/your-username/croncloud  # Render will ask for repo connection anyway
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: croncloud-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+
+databases:
+  - name: croncloud-db
+    plan: free
+    databaseName: croncloud
+    user: croncloud
