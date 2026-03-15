@@ -50,8 +50,36 @@ export default function Dashboard() {
 
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 5000); // Poll every 5s
-        return () => clearInterval(interval);
+
+        // Set up SSE for real-time updates
+        const eventSource = new EventSource('http://localhost:5000/api/events');
+        
+        eventSource.addEventListener('connected', () => {
+            console.log('SSE connected');
+        });
+
+        eventSource.addEventListener('job:executed', (event) => {
+            const data = JSON.parse(event.data);
+            console.log('Job executed:', data);
+            // Refresh history to show latest execution
+            api.get('/history').then(res => setHistory(res.data));
+        });
+
+        eventSource.addEventListener('job:circuit-open', (event) => {
+            const data = JSON.parse(event.data);
+            console.log('Circuit breaker opened:', data);
+            alert(`Circuit breaker triggered for job: ${data.name}. Job has been paused.`);
+            fetchData();
+        });
+
+        eventSource.onerror = () => {
+            console.log('SSE connection error, falling back to polling');
+            eventSource.close();
+        };
+
+        return () => {
+            eventSource.close();
+        };
     }, []);
 
     const toggleJob = async (job: Job) => {
@@ -60,10 +88,7 @@ export default function Dashboard() {
             const newStatus = job.status === 'active' ? 'paused' : 'active';
             setJobs(jobs.map(j => j.id === job.id ? { ...j, status: newStatus } : j));
 
-            await api.put(`/jobs/${job.id}`, {
-                ...job,
-                status: newStatus
-            });
+            await api.patch(`/jobs/${job.id}/toggle`);
         } catch (error) {
             console.error('Failed to toggle job', error);
             fetchData(); // Revert
