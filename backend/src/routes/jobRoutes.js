@@ -4,7 +4,8 @@ import {
     getJobById,
     createJob,
     updateJob,
-    deleteJob
+    deleteJob,
+    toggleJob
 } from '../controllers/jobController.js';
 
 const router = express.Router();
@@ -13,6 +14,7 @@ router.get('/', getJobs);
 router.get('/:id', getJobById);
 router.post('/', createJob);
 router.put('/:id', updateJob);
+router.patch('/:id/toggle', toggleJob);
 router.delete('/:id', deleteJob);
 
 export default router;

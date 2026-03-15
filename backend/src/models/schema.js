@@ -13,7 +13,8 @@ const initDb = async () => {
         headers TEXT,
         body TEXT,
         cronExpression TEXT NOT NULL,
-        status TEXT DEFAULT 'active', -- active, paused
+        status TEXT DEFAULT 'active',
+        secret TEXT,
         lastExecution TEXT,
         nextExecution TEXT,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP
@@ -25,7 +26,7 @@ const initDb = async () => {
       CREATE TABLE IF NOT EXISTS execution_history (
         id TEXT PRIMARY KEY,
         jobId TEXT NOT NULL,
-        status TEXT NOT NULL, -- success, failed
+        status TEXT NOT NULL,
         statusCode INTEGER,
         response TEXT,
         duration INTEGER,

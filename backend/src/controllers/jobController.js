@@ -98,3 +98,26 @@ export const deleteJob = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+export const toggleJob = async (req, res) => {
+    try {
+        const job = await JobModel.findById(req.params.id);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+
+        const newStatus = job.status === 'active' ? 'paused' : 'active';
+        const updatedJob = await JobModel.update(req.params.id, { status: newStatus });
+
+        if (newStatus === 'active') {
+            scheduler.schedule(updatedJob);
+        } else {
+            scheduler.stop(updatedJob.id);
+        }
+
+        updatedJob.headers = updatedJob.headers ? JSON.parse(updatedJob.headers) : {};
+        updatedJob.body = updatedJob.body ? JSON.parse(updatedJob.body) : {};
+
+        res.json(updatedJob);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};

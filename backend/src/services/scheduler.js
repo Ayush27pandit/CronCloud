@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { JobModel } from '../models/jobModel.js';
-import { executeJob } from './jobExecutor.js';
+import { addJobToQueue } from './queueService.js';
 
 // In-memory store for active cron tasks
 const tasks = new Map();
@@ -35,7 +35,7 @@ export const scheduler = {
             }
 
             const task = cron.schedule(job.cronExpression, () => {
-                executeJob(job);
+                addJobToQueue(job);
             });
 
             tasks.set(job.id, task);
