@@ -1,54 +1,83 @@
-# CronCloud Project Structure and Architecture
+# CronCloud - Distributed Job Scheduler
 
-## Architecture Overview (Phase 1)
+A production-ready distributed job scheduling platform for scheduling and monitoring HTTP-based automated tasks with real-time logging.
 
-We are building a **Distributed Job Scheduler** named **CronCloud**. 
-In Phase 1, we focus on a robust localized version.
+## Features
 
-### Components:
+### Core Features
+- **Job Scheduling** - Schedule HTTP requests using cron expressions
+- **Real-time Updates** - SSE (Server-Sent Events) for instant job status updates
+- **Job History** - Track all executions with status, duration, and response
+- **Pause/Resume** - Toggle jobs without deleting them
 
-1.  **Frontend (Client)**: 
-    *   Built with **React (Vite)** + **TypeScript**.
-    *   Styled with **Tailwind CSS** and **shadcn/ui** components.
-    *   Communicates with the Backend via REST API.
-    *   Updates in real-time (to be implemented via polling/SSE).
+### Reliability
+- **Retry with Exponential Backoff** - Failed jobs automatically retry (3 attempts)
+- **Circuit Breaker** - Auto-pauses jobs after 2 consecutive failures
+- **30s Timeout** - Prevents jobs from hanging indefinitely
 
-2.  **Backend (Server)**:
-    *   Built with **Node.js** + **Express**.
-    *   Uses **ES Modules** (`import`/`export`).
-    *   **SQLite** file-based database for simple, zero-config persistence.
-    *   **node-cron** for handling job scheduling within the Node process.
+### Production-Ready
+- **BullMQ + Redis** - Reliable job queue for distributed processing
+- **PostgreSQL Support** - Production database (also supports SQLite for dev)
+- **Webhook Signature** - HMAC-SHA256 signed requests for secure webhooks
 
-3.  **Flow**:
-    *   User creates a job (e.g., "Hit https://api.example.com every 5 mins") on Frontend.
-    *   Frontend sends POST request to Backend.
-    *   Backend saves job to SQLite database.
-    *   Backend acts as the Scheduler: `node-cron` picks up the job and executes the HTTP request at the scheduled time.
-    *   Backend logs the result (success/failure) to the database.
-    *   Frontend fetches history to show the user.
+## Architecture
+
+```
+┌─────────────┐     REST API      ┌─────────────┐
+│   Frontend  │ ◄────────────────► │   Backend   │
+│  (React)    │   Real-time SSE   │  (Express)  │
+└─────────────┘                    └──────┬──────┘
+                                          │
+                    ┌─────────────────────┼─────────────────────┐
+                    │                     │                     │
+              ┌─────▼─────┐       ┌──────▼──────┐       ┌─────▼─────┐
+              │  Scheduler │       │ BullMQ Queue │       │  SQLite/  │
+              │ (node-cron)       │   (Redis)    │       │ PostgreSQL │
+              └─────┬─────┘       └──────┬──────┘       └───────────┘
+                    │                     │
+              ┌─────▼─────────────────────▼─────┐
+              │         Job Executor             │
+              │   (HTTP Requests + Logging)     │
+              └─────────────────────────────────┘
+```
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React, Vite, TypeScript, Tailwind CSS |
+| Backend | Node.js, Express, ES Modules |
+| Database | SQLite (dev), PostgreSQL (prod) |
+| Queue | BullMQ, Redis |
+| Scheduling | node-cron |
 
 ## Project Structure
 
 ```
 CronCloud/
-├── backend/                # Node.js API & Scheduler
+├── backend/
 │   ├── src/
-│   │   ├── config/         # Database & app config
+│   │   ├── config/         # Database configuration
 │   │   ├── controllers/    # Request handlers
-│   │   ├── models/         # Database models/schema
-│   │   ├── routes/         # API routes definition
-│   │   ├── services/       # Business logic (Scheduler, Job Execution)
-│   │   ├── utils/          # Helpers (Logger, Validator)
-│   │   ├── app.js          # Express app setup
-│   │   └── server.js       # Entry point
-│   ├── .env                # Secrets (PORT, etc.)
+│   │   ├── models/         # Database models
+│   │   ├── routes/         # API routes
+│   │   ├── services/       # Business logic
+│   │   │   ├── scheduler.js    # Cron scheduling
+│   │   │   ├── jobExecutor.js  # Job execution + retries
+│   │   │   ├── queueService.js  # BullMQ queue
+│   │   │   └── sseService.js    # Server-Sent Events
+│   │   ├── utils/
+│   │   │   └── webhookAuth.js   # HMAC signature
+│   │   ├── app.js
+│   │   └── server.js
+│   ├── .env
 │   └── package.json
 │
-├── frontend/               # React Application
+├── frontend/
 │   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Page views (Dashboard, History)
-│   │   ├── services/       # API integration
+│   │   ├── components/     # UI components
+│   │   ├── pages/          # Dashboard
+│   │   ├── services/       # API client
 │   │   └── App.tsx
 │   └── package.json
 │
@@ -57,12 +86,123 @@ CronCloud/
 
 ## Setup Instructions
 
-### Backend
-1. `cd backend`
-2. `npm install`
-3. `npm run dev` (Runs on port 5000)
+### Prerequisites
+- Node.js 18+
+- Redis (for job queue)
 
-### Frontend
-1. `cd frontend`
-2. `npm install`
-3. `npm run dev` (Runs on port 5173 usually)
+### Quick Start
+
+**1. Start Redis (Docker)**
+```bash
+docker run -d -p 6379:6379 redis
+```
+
+**2. Start Backend**
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+**3. Start Frontend (new terminal)**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**4. Open Browser**
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:5000
+
+## Environment Variables
+
+Create `backend/.env`:
+```env
+PORT=5000
+NODE_ENV=development
+
+# SQLite (local development)
+DATABASE_URL=file:./dev.db
+
+# PostgreSQL (production)
+# DATABASE_URL=postgres://user:pass@host:5432/db
+
+# Redis (required for BullMQ)
+REDIS_URL=redis://localhost:6379
+```
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/jobs` | List all jobs |
+| POST | `/api/jobs` | Create a new job |
+| GET | `/api/jobs/:id` | Get job by ID |
+| PUT | `/api/jobs/:id` | Update job |
+| PATCH | `/api/jobs/:id/toggle` | Pause/Resume job |
+| DELETE | `/api/jobs/:id` | Delete job |
+| GET | `/api/history` | Get execution history |
+| GET | `/api/events` | SSE real-time events |
+
+## Webhook Security
+
+When creating a job with a `secret`, requests include signed payloads:
+
+```bash
+curl -X POST http://localhost:5000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Secure Webhook",
+    "url": "https://your-api.com/hook",
+    "cronExpression": "*/5 * * * *",
+    "method": "POST",
+    "body": {"event": "trigger"},
+    "secret": "your-secret-key"
+  }'
+```
+
+**Request Headers:**
+- `X-Signature`: HMAC-SHA256 hash
+- `X-Timestamp`: Unix timestamp
+
+**Verify on receiving server:**
+```javascript
+const crypto = require('crypto');
+const signature = crypto
+    .createHmac('sha256', secret)
+    .update(JSON.stringify(payload))
+    .digest('hex');
+// Compare with X-Signature header
+```
+
+## Job Model
+
+```json
+{
+  "id": "uuid",
+  "name": "Job Name",
+  "url": "https://example.com/api",
+  "method": "POST",
+  "headers": {},
+  "body": {"key": "value"},
+  "cronExpression": "*/5 * * * *",
+  "status": "active",
+  "secret": "optional-webhook-secret",
+  "lastExecution": "2024-01-01T00:00:00Z",
+  "createdAt": "2024-01-01T00:00:00Z"
+}
+```
+
+## Scaling Path
+
+| Phase | Architecture | Use Case |
+|-------|--------------|----------|
+| Phase 1 | Single Node + SQLite | Development |
+| Phase 2 | Single Node + PostgreSQL | Small production |
+| Phase 3 | Distributed + BullMQ | High availability |
+| Phase 4 | Multi-region workers | Enterprise scale |
+
+## License
+
+MIT
